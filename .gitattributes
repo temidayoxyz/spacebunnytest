@@ -1,0 +1,8 @@
+# normalise line endings in the repository, check out per platform
+* text=auto eol=lf
+
+# binary assets must never be touched
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
