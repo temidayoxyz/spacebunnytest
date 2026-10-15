@@ -5,29 +5,14 @@ Glass vessel, molten wax, brushed-aluminium pedestal, studio and lighting rig �
 every pixel is generated at runtime. No meshes, no textures, no HDRIs, no
 photographs.
 
-![A photorealistic lava lamp: a tall glass vessel of clear liquid holding
-suspended orange wax masses, lit from a warm heater at the base, standing on a
-brushed aluminium pedestal with a domed cap, against a warm taupe studio
-sweep.](renders/lava-lamp.png)
+![A lava lamp standing on a seamless studio sweep, lit warmly from within](renders/lava-lamp.png)
 
 <sub>2000 × 2700 · rendered by `npm run dev` from `src/main.js`</sub>
 
 Three.js draws it with real refraction, subsurface-scattering shading, image
 based lighting and a four-light photographic rig. The wax is an **implicit
 surface** — a smooth union of displaced ellipsoids polygonised with marching
-cubes — so the masses fuse and deform the way molten wax actually does, rather
-than sitting there as a row of spheres.
-
-## What's in the frame
-
-| | |
-| --- | --- |
-| **Glass** | A hollow revolved shell with 3.2 mm wall thickness, real transmission, refraction and Fresnel edge highlights |
-| **Wax** | Implicit-surface masses with chord-length subsurface thickness, a glowing silhouette, and internal marbling |
-| **Liquid** | A separate refracting volume with a concave meniscus at the fill line |
-| **Metal** | Anisotropic brushed aluminium with a procedural turned grain |
-| **Studio** | A softbox rig baked to a PMREM environment map, plus a seamless cyclorama sweep with baked falloff and contact occlusion |
-
+cubes — so the masses fuse, thin and re-form the way molten wax actually does.
 
 ## Running it
 
@@ -64,27 +49,28 @@ than a judgement call about a screenshot.
 
 `src/lib/geometry.js` holds every part of the lamp as a 2D *(radius, height)*
 profile that is splined through a dozen control points and revolved with
-`LatheGeometry`. Nothing is a stock primitive, so the silhouette is fully
-art-directable and there are no seams where primitives would meet.
+`LatheGeometry`, so the silhouette is fully art-directable and there are no
+seams where separate primitives would meet.
 
 The profiles are authored against a real appliance: the finished lamp stands
 **446 mm** tall, the glass vessel is **321 mm** by **85 mm** across its widest
 point, and the pedestal is **107 mm** in diameter — all within a few percent of
 a 45 cm Mathmos Astro.
 
-The glass is a genuinely hollow shell. Its cross-section is walked bottom face →
-outer wall → rim → inner wall → inner floor, with the inner wall produced by
-offsetting the outer profile along its own 2D normal, so the 3.2 mm wall
-thickness stays constant around the whole taper.
+The glass is a hollow shell. Its cross-section is walked bottom face → outer
+wall → rim → inner wall → inner floor, with the inner wall produced by offsetting
+the outer profile along its own 2D normal, so the 3.2 mm wall thickness stays
+constant around the whole taper.
 
 ### The wax
 
-The wax is an **implicit surface**, not a set of spheres. `src/lib/wax.js`
-smooth-unions a couple of dozen rotated ellipsoids, displaces the result with
-two octaves of gradient noise, and polygonises the field with a marching cubes
-implementation in `src/lib/marching.js`. That gives genuinely fused, irregular
-masses with rounded silhouettes and partial connections, at whatever resolution
-you ask for (`?waxres=`).
+`src/lib/wax.js` smooth-unions a couple of dozen ellipsoids, displaces the
+result with two octaves of gradient noise, and polygonises the field with a
+marching cubes implementation in `src/lib/marching.js`. Because the blobs are
+fused in the field rather than placed as separate objects, a mass can thin into
+a wisp, pinch off, or grow a lobe that belongs to it — the interesting shapes
+come out of the maths instead of being modelled by hand. Resolution is a query
+parameter (`?waxres=`).
 
 The polygoniser is a trimmed version of three's own: it works directly in world
 space over a cropped sub-grid, skips the normal cache, and grows its vertex
@@ -116,9 +102,9 @@ PMREM environment map, and also generates the physical cyclorama the lamp stands
 on — a flat floor running into a 1.15 m cove and a wall, with the falloff and a
 contact-occlusion pool baked into vertex colours.
 
-The softboxes are deliberately small. A large emitter gives rough metal a flat,
-shapeless white field; a tight one gives a highlight that actually describes the
-curve of the pedestal.
+The softboxes are deliberately small. A large emitter fills the reflection of
+rough metal with an even field and the pedestal stops reading as a curved solid;
+a tight one gives a highlight that actually describes the curve.
 
 ### Lighting
 
@@ -134,21 +120,26 @@ three that keeps the wax reading as molten orange.
 
 ## Notes from the build
 
-A few things that were not obvious and are worth not re-discovering:
+Four things that cost real time and are worth not re-discovering:
 
 - The wax field stores `-sdf`, following the Bourke/three convention where
   `field < iso` means *outside*. The "far from any blob" sentinel therefore has
   to be a large **negative** value. Seeding it positive makes the polygoniser
-  treat the whole background as interior and generates a phantom shell around
-  every blob — it is invisible as a shape but it greys out the entire vessel.
+  treat the background as interior and generates a phantom shell around every
+  blob — invisible as a shape, but it greys out the whole vessel.
 - Per-vertex attributes interpolated across ~1 mm triangles make their own
   iso-contours legible as banding. Computing the thickness per fragment removes
   the whole class of artefact.
-- A thin glass shell wants `FrontSide` with depth writes on. With `DoubleSide`
-  and depth writes off, the inner and outer surfaces blend in index order, which
-  both fogs the vessel and leaves hard staircase seams in the neck.
+- A thin shell wants `FrontSide` with depth writes on. With `DoubleSide` and
+  depth writes off, the inner and outer surfaces blend in index order, which
+  fogs the vessel and leaves hard staircase seams where they cross in the neck.
 - The obvious `fract( sin( ... ) )` shader hash collapses into visible stripes
   once the input gets large. The wax shader uses a multiply/frac hash instead.
+
+There is also a mundane one: `renderer.setSize()` clears the drawing buffer, so
+a resize handler that forgets to repaint leaves a permanently blank canvas. The
+app now renders on demand via `requestAnimationFrame`, and
+`tools/check-blank.mjs` guards it.
 
 ## Query parameters
 
